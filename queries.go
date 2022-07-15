@@ -75,7 +75,8 @@ func getLogsPaginated(ctx context.Context, lpr logsPaginationRequest) (*Paginati
 		// // }
 	}
 	sqlStr := fmt.Sprintf(`SELECT
-  		SESSION_ID
+  		LOG_ID
+  	, SESSION_ID
 		, LOG_LEVEL
 		, URL
 		, MSG
@@ -102,7 +103,7 @@ func getLogsPaginated(ctx context.Context, lpr logsPaginationRequest) (*Paginati
 	}
 	pr.NumFilteredRecords = numFilteredRecords
 
-	sqlStr += " ORDER BY SESSION_ID, TIMESTAMP"
+	sqlStr += " ORDER BY LOG_ID"
 
 	if lpr.Parameters.Limit > 0 {
 		pr.PageCount = int(math.Max(float64(numFilteredRecords/lpr.Parameters.Limit), float64(1)))
@@ -139,7 +140,7 @@ func getLogsPaginated(ctx context.Context, lpr logsPaginationRequest) (*Paginati
 		// b := new(bytes.Buffer)
 		// lob.SetWriter(b)
 
-		if err := rows.Scan(&l.SESSION_ID, &l.LOG_LEVEL, &l.URL, &lobRuleJSON, &l.STACKTRACE, &l.TIMESTAMP, &l.USERAGENT, &l.CLIENT_IP, &l.REMOTE_IP); err != nil {
+		if err := rows.Scan(&l.LOG_ID, &l.SESSION_ID, &l.LOG_LEVEL, &l.URL, &lobRuleJSON, &l.STACKTRACE, &l.TIMESTAMP, &l.USERAGENT, &l.CLIENT_IP, &l.REMOTE_IP); err != nil {
 			log.Println("error scanning function block, index:", i, err)
 			return nil, err
 		}

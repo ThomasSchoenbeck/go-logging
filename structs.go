@@ -4,6 +4,7 @@ import "time"
 
 type (
 	ClientLogs struct {
+		LOG_ID     int
 		SESSION_ID string
 		LOG_LEVEL  string
 		URL        string
