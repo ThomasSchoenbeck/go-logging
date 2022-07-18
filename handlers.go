@@ -23,16 +23,74 @@ func handleLogsList(c *gin.Context) {
 	c.Header("Access-Control-Allow-Origin", "*")
 	c.Header("Access-Control-Allow-Methods", "POST")
 
-	var lpr logsPaginationRequest
-	if err := c.ShouldBindJSON(&lpr); err != nil {
-		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
-		// c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var lpr PaginationRequest
+
+	appID := c.Param("appID")
+	if appID == "" {
+		log.Println("incorrect app id", appID)
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Incorrect app id: %s", appID)})
 		return
 	}
 
-	res, err := getLogsPaginated(ctx, lpr)
+	if err := c.ShouldBindJSON(&lpr); err != nil {
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	res, err := getLogsPaginated(ctx, lpr, appID)
 	if err != nil {
 		log.Println("error reading logs", err)
+		respondWithJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	respondWithJSON(c, http.StatusOK, res)
+
+}
+
+func handleGetAppByID(c *gin.Context) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextTimeoutDuration)
+	defer cancel()
+
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Methods", "POST")
+
+	appID := c.Param("appID")
+	if appID == "" {
+		log.Println("incorrect app id", appID)
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Incorrect app id: %s", appID)})
+		return
+	}
+
+	res, err := getAppByID(ctx, appID)
+	if err != nil {
+		log.Println("error reading app from id", appID, err)
+		respondWithJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	respondWithJSON(c, http.StatusOK, res)
+
+}
+func handleAppsList(c *gin.Context) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextTimeoutDuration)
+	defer cancel()
+
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Methods", "POST")
+
+	var lpr PaginationRequest
+
+	if err := c.ShouldBindJSON(&lpr); err != nil {
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	res, err := getAppsPaginated(ctx, lpr)
+	if err != nil {
+		log.Println("error reading apps", err)
 		respondWithJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -130,7 +188,6 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	defer file.Close()
 
-
 	buff := make([]byte, 512)
 	_, err = file.Read(buff)
 	if err != nil {
@@ -139,18 +196,16 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	filetype := http.DetectContentType(buff)
-	if filetype != "image/jpeg" && filetype != "image/png" && filetype != "image/gif" { {
+	if filetype != "image/jpeg" && filetype != "image/png" && filetype != "image/gif" {
 		http.Error(w, "The provided file format is not allowed. Please upload a JPEG, PNG or GIF image", http.StatusBadRequest)
 		return
 	}
 
-	_, err := file.Seek(0, io.SeekStart)
+	_, err = file.Seek(0, io.SeekStart)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-
 
 	// Create the uploads folder if it doesn't
 	// already exist

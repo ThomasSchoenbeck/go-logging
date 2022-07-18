@@ -1,12 +1,11 @@
 package main
 
-import "time"
-
 type (
 	Application struct {
 		APP_ID   string
 		APP_NAME string
 		APP_URL  string
+		APP_DESC string
 		APP_LOGO []byte
 	}
 
@@ -18,10 +17,11 @@ type (
 		// MSG        string
 		MSG        interface{}
 		STACKTRACE string
-		TIMESTAMP  time.Time
-		USERAGENT  string
-		CLIENT_IP  string
-		REMOTE_IP  string
+		// TIMESTAMP  time.Time
+		TIMESTAMP string
+		USERAGENT string
+		CLIENT_IP string
+		REMOTE_IP string
 	}
 
 	filters struct {
@@ -29,10 +29,15 @@ type (
 		Value interface{} `json:"value"`
 	}
 
-	logsPaginationRequest struct {
+	sorting struct {
+		Field         string
+		SortDirection string
+	}
+
+	PaginationRequest struct {
 		Parameters paginationParameters `json:"parameters"`
 		Filters    *[]filters           `json:"filters"`
-		Sorting    *ClientLogs          `json:"sorting"`
+		Sorting    *[]sorting           `json:"sorting"`
 	}
 
 	paginationParameters struct {

@@ -20,7 +20,9 @@ func setupRouter() {
 	})
 
 	r.POST("/logger", handleRemoteLogs)
-	r.POST("/logs", handleLogsList)
+	r.POST("/logs/:appID", handleLogsList)
+	r.POST("/apps", handleAppsList)
+	r.GET("/apps/:appID", handleGetAppByID)
 
 	// w.Header().Set("Access-Control-Allow-Origin", "*")
 	// w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE")

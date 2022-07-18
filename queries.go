@@ -1,19 +1,19 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"math"
+	"reflect"
 	"strings"
 
 	"github.com/SAP/go-hdb/driver"
 )
 
-func getLogsPaginated(ctx context.Context, lpr logsPaginationRequest) (*PaginationResponse, error) {
+func getLogsPaginated(ctx context.Context, lpr PaginationRequest, appID string) (*PaginationResponse, error) {
 
 	var cls []ClientLogs
 
@@ -27,7 +27,7 @@ func getLogsPaginated(ctx context.Context, lpr logsPaginationRequest) (*Paginati
 	// get total number of Records
 	err := db.QueryRowContext(ctx, sqlNumOfRecords).Scan(&numTotalRecords)
 	if err != nil {
-		log.Println("error collecting number of Total REcords for Function Blocks", err)
+		log.Println("error collecting number of Total Records for Client Logs", err)
 		return nil, err
 	}
 	pr.NumRecords = numTotalRecords
@@ -76,6 +76,7 @@ func getLogsPaginated(ctx context.Context, lpr logsPaginationRequest) (*Paginati
 	}
 	sqlStr := fmt.Sprintf(`SELECT
   		LOG_ID
+		, APP_ID
   	, SESSION_ID
 		, LOG_LEVEL
 		, URL
@@ -89,6 +90,7 @@ func getLogsPaginated(ctx context.Context, lpr logsPaginationRequest) (*Paginati
 	`)
 
 	var sqlNumFilteredRecords string = sqlNumOfRecords
+	whereClause = append(whereClause, fmt.Sprintf("APP_ID = '%s'", appID))
 	if len(whereClause) > 0 {
 		sqlStr += fmt.Sprintf("where %s", strings.Join(whereClause, " AND "))
 		sqlNumFilteredRecords += fmt.Sprintf("where %s", strings.Join(whereClause, " AND "))
@@ -117,7 +119,7 @@ func getLogsPaginated(ctx context.Context, lpr logsPaginationRequest) (*Paginati
 
 	rows, err := db.QueryContext(ctx, sqlStr)
 	if err != nil {
-		log.Println("Error query function blocks paginated", err)
+		log.Println("Error query Client Logs paginated", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -127,49 +129,161 @@ func getLogsPaginated(ctx context.Context, lpr logsPaginationRequest) (*Paginati
 		var l ClientLogs
 
 		//For CLOB Column
-		b := new(bytes.Buffer)
-		var lobRuleJSON driver.NullLob
-		lobRuleJSON.Lob = new(driver.Lob)
-		lobRuleJSON.Lob.SetWriter(b)
-
-		// var ioStringFunctionJSON *strings.Reader
-		// lob := &driver.Lob{}
-		// lob.SetReader(ioStringFunctionJSON)
-
-		// lob := new(driver.Lob)
 		// b := new(bytes.Buffer)
-		// lob.SetWriter(b)
+		// var lobRuleJSON driver.NullLob
+		// lobRuleJSON.Lob = new(driver.Lob)
+		// lobRuleJSON.Lob.SetWriter(b)
 
-		if err := rows.Scan(&l.LOG_ID, &l.SESSION_ID, &l.LOG_LEVEL, &l.URL, &lobRuleJSON, &l.STACKTRACE, &l.TIMESTAMP, &l.USERAGENT, &l.CLIENT_IP, &l.REMOTE_IP); err != nil {
-			log.Println("error scanning function block, index:", i, err)
+		// if err := rows.Scan(&l.LOG_ID, &l.SESSION_ID, &l.LOG_LEVEL, &l.URL, &lobRuleJSON, &l.STACKTRACE, &l.TIMESTAMP, &l.USERAGENT, &l.CLIENT_IP, &l.REMOTE_IP); err != nil {
+		if err := rows.Scan(&l.LOG_ID, &l.SESSION_ID, &l.LOG_LEVEL, &l.URL, &l.MSG, &l.STACKTRACE, &l.TIMESTAMP, &l.USERAGENT, &l.CLIENT_IP, &l.REMOTE_IP); err != nil {
+			log.Println("error scanning Client Logs, index:", i, err)
 			return nil, err
 		}
 
-		// b, err := json.Marshal(lob)
-		// if err != nil {
-		// 	panic(err)
+		// if lobRuleJSON.Valid { // only valid if data from DB is not NULL
+		// l.MSG = string(b.Bytes())
 		// }
-		// fmt.Println(string(b))
-		// l.MSG = lob
-
-		if lobRuleJSON.Valid { // only valid if data from DB is not NULL
-			// stringValue := string(b.Bytes())
-			// ruleVersion.RULE_JSON = &stringValue
-
-			l.MSG = string(b.Bytes())
-		}
-
-		// l.MSG = string(b)
-		// wr := &bytes.Buffer{}
-		// lob.SetWriter(wr)
-
-		// l.MSG = *lob
 
 		cls = append(cls, l)
 		i++
 	}
 
 	pr.Data = cls
+
+	return &pr, nil
+}
+
+func getSQLPaginationFilters(filters *[]filters) []string {
+
+	var whereClause []string
+
+	if filters != nil {
+
+		for _, f := range *filters {
+
+			log.Println("filter", f, f.Value)
+
+			if f.Value == reflect.TypeOf("string") {
+				whereClause = append(whereClause, fmt.Sprintf("lower(%s) LIKE '%%%s%%'", f.Field, strings.ToLower(fmt.Sprintf("%v", f.Value))))
+			}
+
+			if f.Value == reflect.TypeOf("int") {
+				whereClause = append(whereClause, fmt.Sprintf("%s LIKE '%%%s%%'", f.Field, fmt.Sprintf("%v", f.Value)))
+			}
+
+		}
+
+	}
+
+	return whereClause
+}
+
+func getTotalAmountOfRecords(ctx context.Context, sqlNumOfRecords string) (int, error) {
+
+	var numTotalRecords int
+	// get total number of Records
+	err := db.QueryRowContext(ctx, sqlNumOfRecords).Scan(&numTotalRecords)
+	if err != nil {
+		log.Println("error collecting number of Total Records for apps", err)
+		return -1, err
+	}
+
+	return numTotalRecords, nil
+}
+
+func getAppByID(ctx context.Context, appID string) (*Application, error) {
+	var a Application
+
+	err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT
+		APP_ID
+	, APP_NAME
+	, APP_URL
+	, APP_DESC
+	, APP_LOGO
+	FROM TSC_APPLICATIONS WHERE APP_ID = %s`, appID)).Scan(&a.APP_ID, &a.APP_NAME, &a.APP_URL, &a.APP_DESC, &a.APP_LOGO)
+	if err != nil {
+		log.Println("error getting app by id", appID, err)
+		return nil, err
+	}
+
+	return &a, nil
+}
+
+func getAppsPaginated(ctx context.Context, lpr PaginationRequest) (*PaginationResponse, error) {
+	var apps []Application
+	var numFilteredRecords int
+	var pr PaginationResponse
+	var sqlNumOfRecords = "SELECT COUNT(*) from TSC_APPLICATIONS "
+
+	var err error
+	pr.NumRecords, err = getTotalAmountOfRecords(ctx, sqlNumOfRecords)
+	if err != nil {
+		log.Println("error getting total number of records", err)
+		return nil, err
+	}
+	if pr.NumRecords == -1 {
+		log.Println("invalid number of records", pr)
+	}
+
+	whereClause := getSQLPaginationFilters(lpr.Filters)
+
+	sqlStr := fmt.Sprintf(`SELECT
+  		APP_ID
+  	, APP_NAME
+		, APP_URL
+		, APP_DESC
+		, APP_LOGO
+	FROM TSC_APPLICATIONS
+	`)
+
+	var sqlNumFilteredRecords string = sqlNumOfRecords
+	if len(whereClause) > 0 {
+		sqlStr += fmt.Sprintf("where %s", strings.Join(whereClause, " AND "))
+		sqlNumFilteredRecords += fmt.Sprintf("where %s", strings.Join(whereClause, " AND "))
+	}
+
+	log.Println("sqlNumFilteredRecords", sqlNumFilteredRecords)
+
+	err = db.QueryRowContext(ctx, sqlNumFilteredRecords).Scan(&numFilteredRecords)
+	if err != nil {
+		log.Println("error counting number of filtered records", err)
+		return nil, err
+	}
+	pr.NumFilteredRecords = numFilteredRecords
+
+	// sqlStr += " ORDER BY LOG_ID"
+
+	if lpr.Parameters.Limit > 0 {
+		pr.PageCount = int(math.Max(float64(numFilteredRecords/lpr.Parameters.Limit), float64(1)))
+		sqlStr += fmt.Sprintf(" LIMIT %d", lpr.Parameters.Limit)
+		if lpr.Parameters.CurrentPage > 1 {
+			sqlStr += fmt.Sprintf(" OFFSET %d", lpr.Parameters.Limit*(lpr.Parameters.CurrentPage-1))
+		}
+	}
+
+	log.Println("sqlStr", sqlStr)
+
+	rows, err := db.QueryContext(ctx, sqlStr)
+	if err != nil {
+		log.Println("Error query TSC_Applications paginated", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	i := 0
+	for rows.Next() {
+		var a Application
+
+		if err := rows.Scan(&a.APP_ID, &a.APP_NAME, &a.APP_URL, &a.APP_DESC, &a.APP_LOGO); err != nil {
+			log.Println("error scanning function block, index:", i, err)
+			return nil, err
+		}
+
+		apps = append(apps, a)
+		i++
+	}
+
+	pr.Data = apps
 
 	return &pr, nil
 }
