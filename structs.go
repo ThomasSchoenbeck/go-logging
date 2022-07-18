@@ -3,6 +3,13 @@ package main
 import "time"
 
 type (
+	Application struct {
+		APP_ID   string
+		APP_NAME string
+		APP_URL  string
+		APP_LOGO []byte
+	}
+
 	ClientLogs struct {
 		LOG_ID     int
 		SESSION_ID string
