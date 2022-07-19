@@ -48,6 +48,39 @@ func handleLogsList(c *gin.Context) {
 
 }
 
+func handleCreateApp(c *gin.Context) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextTimeoutDuration)
+	defer cancel()
+
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Methods", "POST")
+
+	var a Application
+
+	if err := c.ShouldBindJSON(&a); err != nil {
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	fmt.Printf("a %v\n", a)
+	if a.APP_NAME == "" {
+		log.Println("incorrect app name", a.APP_NAME)
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Incorrect app name: %s", a.APP_NAME)})
+		return
+	}
+
+	res, err := createApp(ctx, a)
+	if err != nil {
+		log.Println("error creating app with name", a.APP_NAME, err)
+		respondWithJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	respondWithJSON(c, http.StatusOK, res)
+
+}
+
 func handleGetAppByID(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextTimeoutDuration)

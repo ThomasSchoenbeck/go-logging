@@ -4,13 +4,14 @@ type (
 	Application struct {
 		APP_ID   string
 		APP_NAME string
-		APP_URL  string
-		APP_DESC string
+		APP_URL  *string
+		APP_DESC *string
 		APP_LOGO []byte
 	}
 
 	ClientLogs struct {
 		LOG_ID     int
+		APP_ID     string
 		SESSION_ID string
 		LOG_LEVEL  string
 		URL        string

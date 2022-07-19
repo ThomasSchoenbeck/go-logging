@@ -2,15 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"math"
 	"reflect"
 	"strings"
-
-	"github.com/SAP/go-hdb/driver"
 )
 
 func getLogsPaginated(ctx context.Context, lpr PaginationRequest, appID string) (*PaginationResponse, error) {
@@ -135,7 +132,7 @@ func getLogsPaginated(ctx context.Context, lpr PaginationRequest, appID string) 
 		// lobRuleJSON.Lob.SetWriter(b)
 
 		// if err := rows.Scan(&l.LOG_ID, &l.SESSION_ID, &l.LOG_LEVEL, &l.URL, &lobRuleJSON, &l.STACKTRACE, &l.TIMESTAMP, &l.USERAGENT, &l.CLIENT_IP, &l.REMOTE_IP); err != nil {
-		if err := rows.Scan(&l.LOG_ID, &l.SESSION_ID, &l.LOG_LEVEL, &l.URL, &l.MSG, &l.STACKTRACE, &l.TIMESTAMP, &l.USERAGENT, &l.CLIENT_IP, &l.REMOTE_IP); err != nil {
+		if err := rows.Scan(&l.LOG_ID, &l.APP_ID, &l.SESSION_ID, &l.LOG_LEVEL, &l.URL, &l.MSG, &l.STACKTRACE, &l.TIMESTAMP, &l.USERAGENT, &l.CLIENT_IP, &l.REMOTE_IP); err != nil {
 			log.Println("error scanning Client Logs, index:", i, err)
 			return nil, err
 		}
@@ -189,6 +186,31 @@ func getTotalAmountOfRecords(ctx context.Context, sqlNumOfRecords string) (int, 
 	}
 
 	return numTotalRecords, nil
+}
+
+func createApp(ctx context.Context, a Application) (*Application, error) {
+
+	newAppId := NewID()
+
+	_, err := db.ExecContext(ctx, "INSERT INTO TSC_APPLICATIONS (APP_ID, APP_NAME) VALUES (?,?)", newAppId, a.APP_NAME)
+	if err != nil {
+		log.Println("error creating app with id", newAppId, err)
+		return nil, err
+	}
+
+	err = db.QueryRowContext(ctx, `SELECT
+		APP_ID
+	, APP_NAME
+	, APP_URL
+	, APP_DESC
+	, APP_LOGO
+	FROM TSC_APPLICATIONS WHERE APP_ID = ?`, newAppId).Scan(&a.APP_ID, &a.APP_NAME, &a.APP_URL, &a.APP_DESC, &a.APP_LOGO)
+	if err != nil {
+		log.Println("error retrieving newly created app with id", newAppId, err)
+		return nil, err
+	}
+
+	return &a, nil
 }
 
 func getAppByID(ctx context.Context, appID string) (*Application, error) {
@@ -302,6 +324,7 @@ func saveLogMessages(ctx context.Context, logs []ClientLogs) error {
 
 	stmt, err := tx.PrepareContext(ctx, `bulk insert into TSC_CLIENT_LOGS (
 		  SESSION_ID
+		, APP_ID
 		, LOG_LEVEL
 		, URL
 		, MSG
@@ -310,7 +333,7 @@ func saveLogMessages(ctx context.Context, logs []ClientLogs) error {
 		, USERAGENT
 		, CLIENT_IP
 		, REMOTE_IP
-		) values (?,?,?,?,?,?,?,?,?)`)
+		) values (?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		log.Println("error in prepare context bulk insert into TSC_CLIENT_LOGS", err)
 		return err
@@ -326,27 +349,28 @@ func saveLogMessages(ctx context.Context, logs []ClientLogs) error {
 		// 	clobMsg.SetReader(strings.NewReader(""))
 		// }
 
-		var ioStringFunctionJSON *strings.Reader
-		var lobFunctionJSON *driver.Lob
-		if l.MSG != nil {
-			b, err := json.Marshal(l.MSG)
-			if err != nil {
-				log.Println(fmt.Sprint("error marshalling dynamic json structure: ", err))
-				return err
-			}
-			fmt.Println(string(b))
-			ioStringFunctionJSON = strings.NewReader(string(b))
-			// ioStringFunctionJSON = strings.NewReader(l.MSG)
-			lobFunctionJSON = new(driver.Lob)
-			lobFunctionJSON.SetReader(ioStringFunctionJSON)
-		}
+		// var ioStringFunctionJSON *strings.Reader
+		// var lobFunctionJSON *driver.Lob
+		// if l.MSG != nil {
+		// 	b, err := json.Marshal(l.MSG)
+		// 	if err != nil {
+		// 		log.Println(fmt.Sprint("error marshalling dynamic json structure: ", err))
+		// 		return err
+		// 	}
+		// 	fmt.Println(string(b))
+		// 	ioStringFunctionJSON = strings.NewReader(string(b))
+		// 	// ioStringFunctionJSON = strings.NewReader(l.MSG)
+		// 	lobFunctionJSON = new(driver.Lob)
+		// 	lobFunctionJSON.SetReader(ioStringFunctionJSON)
+		// }
 
 		var inputData []interface{}
 		inputData = append(inputData, l.SESSION_ID)
+		inputData = append(inputData, l.APP_ID)
 		inputData = append(inputData, l.LOG_LEVEL)
 		inputData = append(inputData, l.URL)
-		inputData = append(inputData, lobFunctionJSON)
-		// inputData = append(inputData, l.MSG)
+		// inputData = append(inputData, lobFunctionJSON)
+		inputData = append(inputData, l.MSG)
 		inputData = append(inputData, l.STACKTRACE)
 		inputData = append(inputData, l.TIMESTAMP)
 		inputData = append(inputData, l.USERAGENT)

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"syscall"
@@ -29,6 +30,7 @@ func init() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	processFlags()
 	checkDbConnection()
+	rand.Seed(time.Now().UnixNano())
 }
 
 func main() {
