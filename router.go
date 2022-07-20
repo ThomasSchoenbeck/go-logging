@@ -21,6 +21,7 @@ func setupRouter() {
 
 	r.POST("/logger", handleRemoteLogs)
 	r.POST("/logs/:appID", handleLogsList)
+	r.POST("/feedback/:appID", handleFeedbackList)
 	r.POST("/apps", handleAppsList)
 	r.POST("/app", handleCreateApp)
 	r.GET("/apps/:appID", handleGetAppByID)

@@ -222,7 +222,7 @@ func getAppByID(ctx context.Context, appID string) (*Application, error) {
 	, APP_URL
 	, APP_DESC
 	, APP_LOGO
-	FROM TSC_APPLICATIONS WHERE APP_ID = %s`, appID)).Scan(&a.APP_ID, &a.APP_NAME, &a.APP_URL, &a.APP_DESC, &a.APP_LOGO)
+	FROM TSC_APPLICATIONS WHERE APP_ID = '%s'`, appID)).Scan(&a.APP_ID, &a.APP_NAME, &a.APP_URL, &a.APP_DESC, &a.APP_LOGO)
 	if err != nil {
 		log.Println("error getting app by id", appID, err)
 		return nil, err
@@ -306,6 +306,85 @@ func getAppsPaginated(ctx context.Context, lpr PaginationRequest) (*PaginationRe
 	}
 
 	pr.Data = apps
+
+	return &pr, nil
+}
+
+func getFeedbackPaginated(ctx context.Context, lpr PaginationRequest, appID string) (*PaginationResponse, error) {
+	var feedbacks []Feedback
+	var numFilteredRecords int
+	var pr PaginationResponse
+	var sqlNumOfRecords = "SELECT COUNT(*) from TSC_FEEDBACK " //keep the space at the end for a following where or order by statement
+
+	var err error
+	pr.NumRecords, err = getTotalAmountOfRecords(ctx, sqlNumOfRecords)
+	if err != nil {
+		log.Println("error getting total number of records", err)
+		return nil, err
+	}
+	if pr.NumRecords == -1 {
+		log.Println("invalid number of records", pr)
+	}
+
+	whereClause := getSQLPaginationFilters(lpr.Filters)
+
+	sqlStr := fmt.Sprintf(`SELECT
+  		FEEDBACK_ID
+  	, APP_ID
+  	, FEEDBACK_TITLE
+		, FEEDBACK_MESSAGE
+		, FEEDBACK_POSITIVE_NEGATIVE
+		, FEEDBACK_RAITING
+	FROM TSC_FEEDBACK WHERE APP_ID = '%s' `, appID) //keep the space for the following statements
+
+	var sqlNumFilteredRecords string = sqlNumOfRecords
+	if len(whereClause) > 0 {
+		sqlStr += strings.Join(whereClause, " AND ")
+		sqlNumFilteredRecords += strings.Join(whereClause, " AND ")
+	}
+
+	log.Println("sqlNumFilteredRecords", sqlNumFilteredRecords)
+
+	err = db.QueryRowContext(ctx, sqlNumFilteredRecords).Scan(&numFilteredRecords)
+	if err != nil {
+		log.Println("error counting number of filtered records", err)
+		return nil, err
+	}
+	pr.NumFilteredRecords = numFilteredRecords
+
+	// sqlStr += " ORDER BY LOG_ID"
+
+	if lpr.Parameters.Limit > 0 {
+		pr.PageCount = int(math.Max(float64(numFilteredRecords/lpr.Parameters.Limit), float64(1)))
+		sqlStr += fmt.Sprintf(" LIMIT %d", lpr.Parameters.Limit)
+		if lpr.Parameters.CurrentPage > 1 {
+			sqlStr += fmt.Sprintf(" OFFSET %d", lpr.Parameters.Limit*(lpr.Parameters.CurrentPage-1))
+		}
+	}
+
+	log.Println("sqlStr", sqlStr)
+
+	rows, err := db.QueryContext(ctx, sqlStr)
+	if err != nil {
+		log.Println("Error query TSC_Applications paginated", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	i := 0
+	for rows.Next() {
+		var f Feedback
+
+		if err := rows.Scan(&f.FEEDBACK_ID, &f.APP_ID, &f.FEEDBACK_TITLE, &f.FEEDBACK_MESSAGE, &f.FEEDBACK_POSITIVE_NEGATIVE, &f.FEEDBACK_RAITING); err != nil {
+			log.Println("error scanning function block, index:", i, err)
+			return nil, err
+		}
+
+		feedbacks = append(feedbacks, f)
+		i++
+	}
+
+	pr.Data = feedbacks
 
 	return &pr, nil
 }

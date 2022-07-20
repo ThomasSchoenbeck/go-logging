@@ -9,6 +9,15 @@ type (
 		APP_LOGO []byte
 	}
 
+	Feedback struct {
+		FEEDBACK_ID                int
+		APP_ID                     string
+		FEEDBACK_TITLE             string
+		FEEDBACK_MESSAGE           string
+		FEEDBACK_POSITIVE_NEGATIVE *bool
+		FEEDBACK_RAITING           *string
+	}
+
 	ClientLogs struct {
 		LOG_ID     int
 		APP_ID     string

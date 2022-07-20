@@ -48,6 +48,39 @@ func handleLogsList(c *gin.Context) {
 
 }
 
+func handleFeedbackList(c *gin.Context) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextTimeoutDuration)
+	defer cancel()
+
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Methods", "POST")
+
+	var pr PaginationRequest
+
+	appID := c.Param("appID")
+	if appID == "" {
+		log.Println("incorrect app id", appID)
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Incorrect app id: %s", appID)})
+		return
+	}
+
+	if err := c.ShouldBindJSON(&pr); err != nil {
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	res, err := getFeedbackPaginated(ctx, pr, appID)
+	if err != nil {
+		log.Println("error reading logs", err)
+		respondWithJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	respondWithJSON(c, http.StatusOK, res)
+
+}
+
 func handleCreateApp(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextTimeoutDuration)
