@@ -310,7 +310,146 @@ func getAppsPaginated(ctx context.Context, lpr PaginationRequest) (*PaginationRe
 	return &pr, nil
 }
 
-func getFeedbackPaginated(ctx context.Context, lpr PaginationRequest, appID string) (*PaginationResponse, error) {
+func createFeedbackChannel(ctx context.Context, appID string, fc Feedback_Channel) (*Feedback_Channel, error) {
+
+	var nfc Feedback_Channel
+	var currentMaxChannelID *int
+	var newMaxChannelID int
+	err := db.QueryRowContext(ctx, "SELECT MAX(CHANNEL_ID) FROM TSC_FEEDBACK_CHANNELS").Scan(&currentMaxChannelID)
+	if err != nil {
+		log.Println("error getting feddback channel max id", err)
+		return nil, err
+	}
+	if currentMaxChannelID == nil {
+		newMaxChannelID = 1
+	} else {
+		newMaxChannelID = *currentMaxChannelID + 1
+	}
+	log.Println("next newMaxChannelID", newMaxChannelID)
+
+	fc.APP_ID = appID
+	fc.CHANNEL_ENDPOINT = fmt.Sprintf("/feedback/%s-%d", appID, newMaxChannelID)
+
+	res, err := db.ExecContext(ctx, `INSERT INTO TSC_FEEDBACK_CHANNELS (
+		  CHANNEL_ID
+		, APP_ID
+		, CHANNEL_NAME
+		, CHANNEL_DESC
+		, CHANNEL_ENDPOINT
+) VALUES (?,?,?,?,?)
+		`, newMaxChannelID, appID, fc.CHANNEL_NAME, fc.CHANNEL_DESC, fc.CHANNEL_ENDPOINT)
+	if err != nil {
+		log.Println("error creating feedback channel for appID", appID, err)
+		return nil, err
+	}
+
+	lid, err := res.LastInsertId()
+	if err != nil {
+		log.Println("last inserted id error", err)
+	}
+	ra, err := res.RowsAffected()
+	if err != nil {
+		log.Println("last rowsaffected error", err)
+	}
+
+	log.Println("created new channel", lid, ra)
+
+	err = db.QueryRowContext(ctx, `SELECT
+		CHANNEL_ID
+	, APP_ID
+	, CHANNEL_NAME
+	, CHANNEL_DESC
+	, CHANNEL_ENDPOINT
+	FROM TSC_FEEDBACK_CHANNELS WHERE APP_ID = ? and CHANNEL_ID = ?`, appID, newMaxChannelID).Scan(&nfc.CHANNEL_ID, &nfc.APP_ID, &nfc.CHANNEL_NAME, &nfc.CHANNEL_DESC, &nfc.CHANNEL_ENDPOINT)
+	if err != nil {
+		log.Println("error retrieving newly created feedback channel for appID", appID, err)
+		return nil, err
+	}
+
+	log.Printf("retrieved newly inserted feedback channel %#v\n", nfc)
+
+	return &nfc, nil
+}
+
+func getFeedbackChannelPaginated(ctx context.Context, lpr PaginationRequest, appID string) (*PaginationResponse, error) {
+	var channels []Feedback_Channel
+	var numFilteredRecords int
+	var pr PaginationResponse
+	var sqlNumOfRecords = "SELECT COUNT(*) from TSC_FEEDBACK_CHANNELS " //keep the space at the end for a following where or order by statement
+
+	var err error
+	pr.NumRecords, err = getTotalAmountOfRecords(ctx, sqlNumOfRecords)
+	if err != nil {
+		log.Println("error getting total number of records", err)
+		return nil, err
+	}
+	if pr.NumRecords == -1 {
+		log.Println("invalid number of records", pr)
+	}
+
+	whereClause := getSQLPaginationFilters(lpr.Filters)
+
+	sqlStr := fmt.Sprintf(`SELECT
+		  CHANNEL_ID
+		, APP_ID
+		, CHANNEL_NAME
+  	, CHANNEL_DESC
+		, CHANNEL_ENDPOINT
+	FROM TSC_FEEDBACK_CHANNELS WHERE APP_ID = '%s' `, appID) //keep the space for the following statements
+
+	var sqlNumFilteredRecords string = sqlNumOfRecords
+	if len(whereClause) > 0 {
+		sqlStr += strings.Join(whereClause, " AND ")
+		sqlNumFilteredRecords += strings.Join(whereClause, " AND ")
+	}
+
+	log.Println("sqlNumFilteredRecords", sqlNumFilteredRecords)
+
+	err = db.QueryRowContext(ctx, sqlNumFilteredRecords).Scan(&numFilteredRecords)
+	if err != nil {
+		log.Println("error counting number of filtered records", err)
+		return nil, err
+	}
+	pr.NumFilteredRecords = numFilteredRecords
+
+	// sqlStr += " ORDER BY LOG_ID"
+
+	if lpr.Parameters.Limit > 0 {
+		pr.PageCount = int(math.Max(float64(numFilteredRecords/lpr.Parameters.Limit), float64(1)))
+		sqlStr += fmt.Sprintf(" LIMIT %d", lpr.Parameters.Limit)
+		if lpr.Parameters.CurrentPage > 1 {
+			sqlStr += fmt.Sprintf(" OFFSET %d", lpr.Parameters.Limit*(lpr.Parameters.CurrentPage-1))
+		}
+	}
+
+	log.Println("sqlStr", sqlStr)
+
+	rows, err := db.QueryContext(ctx, sqlStr)
+	if err != nil {
+		log.Println("Error query TSC_Applications paginated", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	i := 0
+	for rows.Next() {
+		var fc Feedback_Channel
+
+		if err := rows.Scan(&fc.CHANNEL_ID, &fc.APP_ID, &fc.CHANNEL_NAME, &fc.CHANNEL_DESC, &fc.CHANNEL_ENDPOINT); err != nil {
+			log.Println("error scanning function block, index:", i, err)
+			return nil, err
+		}
+
+		channels = append(channels, fc)
+		i++
+	}
+
+	pr.Data = channels
+
+	return &pr, nil
+}
+
+func getFeedbackPaginated(ctx context.Context, lpr PaginationRequest, appID string, channelID int) (*PaginationResponse, error) {
 	var feedbacks []Feedback
 	var numFilteredRecords int
 	var pr PaginationResponse
@@ -329,13 +468,14 @@ func getFeedbackPaginated(ctx context.Context, lpr PaginationRequest, appID stri
 	whereClause := getSQLPaginationFilters(lpr.Filters)
 
 	sqlStr := fmt.Sprintf(`SELECT
-  		FEEDBACK_ID
+  	  CHANNEL_ID
+		, FEEDBACK_ID
   	, APP_ID
   	, FEEDBACK_TITLE
 		, FEEDBACK_MESSAGE
 		, FEEDBACK_POSITIVE_NEGATIVE
 		, FEEDBACK_RAITING
-	FROM TSC_FEEDBACK WHERE APP_ID = '%s' `, appID) //keep the space for the following statements
+	FROM TSC_FEEDBACK WHERE APP_ID = '%s' AND CHANNEL_ID = %d `, appID, channelID) //keep the space for the following statements
 
 	var sqlNumFilteredRecords string = sqlNumOfRecords
 	if len(whereClause) > 0 {
@@ -375,7 +515,7 @@ func getFeedbackPaginated(ctx context.Context, lpr PaginationRequest, appID stri
 	for rows.Next() {
 		var f Feedback
 
-		if err := rows.Scan(&f.FEEDBACK_ID, &f.APP_ID, &f.FEEDBACK_TITLE, &f.FEEDBACK_MESSAGE, &f.FEEDBACK_POSITIVE_NEGATIVE, &f.FEEDBACK_RAITING); err != nil {
+		if err := rows.Scan(&f.CHANNEL_ID, &f.FEEDBACK_ID, &f.APP_ID, &f.FEEDBACK_TITLE, &f.FEEDBACK_MESSAGE, &f.FEEDBACK_POSITIVE_NEGATIVE, &f.FEEDBACK_RAITING); err != nil {
 			log.Println("error scanning function block, index:", i, err)
 			return nil, err
 		}

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,7 +49,7 @@ func handleLogsList(c *gin.Context) {
 
 }
 
-func handleFeedbackList(c *gin.Context) {
+func handleFeedbackChannelList(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), ContextTimeoutDuration)
 	defer cancel()
@@ -70,9 +71,88 @@ func handleFeedbackList(c *gin.Context) {
 		return
 	}
 
-	res, err := getFeedbackPaginated(ctx, pr, appID)
+	res, err := getFeedbackChannelPaginated(ctx, pr, appID)
 	if err != nil {
 		log.Println("error reading logs", err)
+		respondWithJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	respondWithJSON(c, http.StatusOK, res)
+
+}
+
+func handleFeedbackList(c *gin.Context) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextTimeoutDuration)
+	defer cancel()
+
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Methods", "POST")
+
+	var pr PaginationRequest
+
+	appID := c.Param("appID")
+	if appID == "" {
+		log.Println("incorrect app id", appID)
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Incorrect app id: %s", appID)})
+		return
+	}
+	channelID, err := strconv.Atoi(c.Param("channelID"))
+	if err != nil {
+		log.Println("incorrect feedback channel id, not a number", err)
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": fmt.Sprintf("incorrect feedback channel id, not a number: %s, %v", err.Error(), channelID)})
+		return
+	}
+
+	if err := c.ShouldBindJSON(&pr); err != nil {
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	res, err := getFeedbackPaginated(ctx, pr, appID, channelID)
+	if err != nil {
+		log.Println("error reading logs", err)
+		respondWithJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	respondWithJSON(c, http.StatusOK, res)
+
+}
+
+func handleCreateFeedbackChannel(c *gin.Context) {
+
+	ctx, cancel := context.WithTimeout(context.Background(), ContextTimeoutDuration)
+	defer cancel()
+
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Header("Access-Control-Allow-Methods", "POST")
+
+	appID := c.Param("appID")
+	if appID == "" {
+		log.Println("incorrect app id", appID)
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Incorrect app id: %s", appID)})
+		return
+	}
+
+	var fc Feedback_Channel
+
+	if err := c.ShouldBindJSON(&fc); err != nil {
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	fmt.Printf("fc %v\n", fc)
+	if fc.CHANNEL_NAME == "" {
+		log.Println("incorrect feedback channel name", fc.CHANNEL_NAME)
+		respondWithJSON(c, http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Incorrect feedback channel name: %s", fc.CHANNEL_NAME)})
+		return
+	}
+
+	res, err := createFeedbackChannel(ctx, appID, fc)
+	if err != nil {
+		log.Println("error creating feedback channel of app with name", appID, fc.CHANNEL_NAME, err)
 		respondWithJSON(c, http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

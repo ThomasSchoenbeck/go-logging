@@ -9,7 +9,16 @@ type (
 		APP_LOGO []byte
 	}
 
+	Feedback_Channel struct {
+		CHANNEL_ID       int
+		APP_ID           string
+		CHANNEL_NAME     string
+		CHANNEL_DESC     string
+		CHANNEL_ENDPOINT string
+	}
+
 	Feedback struct {
+		CHANNEL_ID                 int
 		FEEDBACK_ID                int
 		APP_ID                     string
 		FEEDBACK_TITLE             string
