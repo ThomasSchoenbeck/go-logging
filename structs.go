@@ -2,11 +2,13 @@ package main
 
 type (
 	Application struct {
-		APP_ID   string
-		APP_NAME string
-		APP_URL  *string
-		APP_DESC *string
-		APP_LOGO []byte
+		APP_ID    string
+		APP_NAME  string
+		APP_URL   *string
+		APP_DESC  *string
+		APP_LOGO  []byte
+		INSERT_TS string
+		UPDATE_TS *string
 	}
 
 	Feedback_Channel struct {
@@ -15,6 +17,9 @@ type (
 		CHANNEL_NAME     string
 		CHANNEL_DESC     string
 		CHANNEL_ENDPOINT string
+		CHANNEL_TYPE     string
+		INSERT_TS        string
+		UPDATE_TS        *string
 	}
 
 	Feedback struct {
@@ -25,6 +30,9 @@ type (
 		FEEDBACK_MESSAGE           string
 		FEEDBACK_POSITIVE_NEGATIVE *bool
 		FEEDBACK_RAITING           *string
+		REVIEWED                   *bool
+		INSERT_TS                  string
+		UPDATE_TS                  *string
 	}
 
 	ClientLogs struct {

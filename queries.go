@@ -204,7 +204,9 @@ func createApp(ctx context.Context, a Application) (*Application, error) {
 	, APP_URL
 	, APP_DESC
 	, APP_LOGO
-	FROM TSC_APPLICATIONS WHERE APP_ID = ?`, newAppId).Scan(&a.APP_ID, &a.APP_NAME, &a.APP_URL, &a.APP_DESC, &a.APP_LOGO)
+	, INSERT_TS
+	, UPDATE_TS
+	FROM TSC_APPLICATIONS WHERE APP_ID = ?`, newAppId).Scan(&a.APP_ID, &a.APP_NAME, &a.APP_URL, &a.APP_DESC, &a.APP_LOGO, &a.INSERT_TS, &a.UPDATE_TS)
 	if err != nil {
 		log.Println("error retrieving newly created app with id", newAppId, err)
 		return nil, err
@@ -222,7 +224,9 @@ func getAppByID(ctx context.Context, appID string) (*Application, error) {
 	, APP_URL
 	, APP_DESC
 	, APP_LOGO
-	FROM TSC_APPLICATIONS WHERE APP_ID = '%s'`, appID)).Scan(&a.APP_ID, &a.APP_NAME, &a.APP_URL, &a.APP_DESC, &a.APP_LOGO)
+	, INSERT_TS
+	, UPDATE_TS
+	FROM TSC_APPLICATIONS WHERE APP_ID = '%s'`, appID)).Scan(&a.APP_ID, &a.APP_NAME, &a.APP_URL, &a.APP_DESC, &a.APP_LOGO, &a.INSERT_TS, &a.UPDATE_TS)
 	if err != nil {
 		log.Println("error getting app by id", appID, err)
 		return nil, err
@@ -255,6 +259,8 @@ func getAppsPaginated(ctx context.Context, lpr PaginationRequest) (*PaginationRe
 		, APP_URL
 		, APP_DESC
 		, APP_LOGO
+		, INSERT_TS
+		, UPDATE_TS
 	FROM TSC_APPLICATIONS
 	`)
 
@@ -296,7 +302,7 @@ func getAppsPaginated(ctx context.Context, lpr PaginationRequest) (*PaginationRe
 	for rows.Next() {
 		var a Application
 
-		if err := rows.Scan(&a.APP_ID, &a.APP_NAME, &a.APP_URL, &a.APP_DESC, &a.APP_LOGO); err != nil {
+		if err := rows.Scan(&a.APP_ID, &a.APP_NAME, &a.APP_URL, &a.APP_DESC, &a.APP_LOGO, &a.INSERT_TS, &a.UPDATE_TS); err != nil {
 			log.Println("error scanning function block, index:", i, err)
 			return nil, err
 		}
@@ -360,7 +366,9 @@ func createFeedbackChannel(ctx context.Context, appID string, fc Feedback_Channe
 	, CHANNEL_NAME
 	, CHANNEL_DESC
 	, CHANNEL_ENDPOINT
-	FROM TSC_FEEDBACK_CHANNELS WHERE APP_ID = ? and CHANNEL_ID = ?`, appID, newMaxChannelID).Scan(&nfc.CHANNEL_ID, &nfc.APP_ID, &nfc.CHANNEL_NAME, &nfc.CHANNEL_DESC, &nfc.CHANNEL_ENDPOINT)
+	, INSERT_TS
+	, UPDATE_TS
+	FROM TSC_FEEDBACK_CHANNELS WHERE APP_ID = ? and CHANNEL_ID = ?`, appID, newMaxChannelID).Scan(&nfc.CHANNEL_ID, &nfc.APP_ID, &nfc.CHANNEL_NAME, &nfc.CHANNEL_DESC, &nfc.CHANNEL_ENDPOINT, &nfc.INSERT_TS, &nfc.UPDATE_TS)
 	if err != nil {
 		log.Println("error retrieving newly created feedback channel for appID", appID, err)
 		return nil, err
@@ -395,6 +403,8 @@ func getFeedbackChannelPaginated(ctx context.Context, lpr PaginationRequest, app
 		, CHANNEL_NAME
   	, CHANNEL_DESC
 		, CHANNEL_ENDPOINT
+		, INSERT_TS
+		, UPDATE_TS
 	FROM TSC_FEEDBACK_CHANNELS WHERE APP_ID = '%s' `, appID) //keep the space for the following statements
 
 	var sqlNumFilteredRecords string = sqlNumOfRecords
@@ -435,7 +445,7 @@ func getFeedbackChannelPaginated(ctx context.Context, lpr PaginationRequest, app
 	for rows.Next() {
 		var fc Feedback_Channel
 
-		if err := rows.Scan(&fc.CHANNEL_ID, &fc.APP_ID, &fc.CHANNEL_NAME, &fc.CHANNEL_DESC, &fc.CHANNEL_ENDPOINT); err != nil {
+		if err := rows.Scan(&fc.CHANNEL_ID, &fc.APP_ID, &fc.CHANNEL_NAME, &fc.CHANNEL_DESC, &fc.CHANNEL_ENDPOINT, &fc.INSERT_TS, &fc.UPDATE_TS); err != nil {
 			log.Println("error scanning function block, index:", i, err)
 			return nil, err
 		}
@@ -475,6 +485,9 @@ func getFeedbackPaginated(ctx context.Context, lpr PaginationRequest, appID stri
 		, FEEDBACK_MESSAGE
 		, FEEDBACK_POSITIVE_NEGATIVE
 		, FEEDBACK_RAITING
+		, REVIEWED
+		, INSERT_TS
+		, UPDATE_TS
 	FROM TSC_FEEDBACK WHERE APP_ID = '%s' AND CHANNEL_ID = %d `, appID, channelID) //keep the space for the following statements
 
 	var sqlNumFilteredRecords string = sqlNumOfRecords
@@ -515,7 +528,7 @@ func getFeedbackPaginated(ctx context.Context, lpr PaginationRequest, appID stri
 	for rows.Next() {
 		var f Feedback
 
-		if err := rows.Scan(&f.CHANNEL_ID, &f.FEEDBACK_ID, &f.APP_ID, &f.FEEDBACK_TITLE, &f.FEEDBACK_MESSAGE, &f.FEEDBACK_POSITIVE_NEGATIVE, &f.FEEDBACK_RAITING); err != nil {
+		if err := rows.Scan(&f.CHANNEL_ID, &f.FEEDBACK_ID, &f.APP_ID, &f.FEEDBACK_TITLE, &f.FEEDBACK_MESSAGE, &f.FEEDBACK_POSITIVE_NEGATIVE, &f.FEEDBACK_RAITING, &f.REVIEWED, &f.INSERT_TS, &f.UPDATE_TS); err != nil {
 			log.Println("error scanning function block, index:", i, err)
 			return nil, err
 		}
