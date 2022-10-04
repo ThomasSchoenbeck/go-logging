@@ -30,6 +30,7 @@ func init() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	processFlags()
 	checkDbConnection()
+	checkDbIntegrity()
 	rand.Seed(time.Now().UnixNano())
 }
 
